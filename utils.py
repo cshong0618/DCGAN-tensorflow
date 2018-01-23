@@ -11,6 +11,7 @@ import numpy as np
 from time import gmtime, strftime
 from six.moves import xrange
 
+import cv2
 import tensorflow as tf
 import tensorflow.contrib.slim as slim
 
@@ -25,7 +26,13 @@ def show_all_variables():
 def get_image(image_path, input_height, input_width,
               resize_height=64, resize_width=64,
               crop=True, grayscale=False):
-  image = imread(image_path, grayscale)
+  image = []  
+  if not grayscale:
+    image = cv2.imread(image_path)
+    (b, g, r) = cv2.split(image)
+    image = cv2.merge([r, g, b])
+  else:
+    image = imread(image_path, grayscale)
   return transform(image, input_height, input_width,
                    resize_height, resize_width, crop)
 

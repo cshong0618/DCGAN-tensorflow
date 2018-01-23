@@ -158,7 +158,7 @@ class DCGAN(object):
         [self.z_sum, self.d_sum, self.d_loss_real_sum, self.d_loss_sum])
     self.writer = SummaryWriter("./logs", self.sess.graph)
 
-    sample_z = np.random.uniform(-1, 1, size=(self.sample_num , self.z_dim))
+    sample_z = np.random.normal(-1, 1, size=(self.sample_num , self.z_dim))
     
     if config.dataset == 'mnist':
       sample_inputs = self.data_X[0:self.sample_num]
@@ -214,11 +214,19 @@ class DCGAN(object):
           else:
             batch_images = np.array(batch).astype(np.float32)
 
-        batch_z = np.random.uniform(-1, 1, [config.batch_size, self.z_dim]) \
+        batch_z = np.random.normal(-1, 1, [config.batch_size, self.z_dim]) \
               .astype(np.float32)
 
         if config.dataset == 'mnist':
           # Update D network
+          _, summary_str = self.sess.run([d_optim, self.d_sum],
+            feed_dict={ 
+              self.inputs: batch_images,
+              self.z: batch_z,
+              self.y:batch_labels,
+            })
+          self.writer.add_summary(summary_str, counter)
+
           _, summary_str = self.sess.run([d_optim, self.d_sum],
             feed_dict={ 
               self.inputs: batch_images,
@@ -235,11 +243,12 @@ class DCGAN(object):
             })
           self.writer.add_summary(summary_str, counter)
 
+          """
           # Run g_optim twice to make sure that d_loss does not go to zero (different from paper)
           _, summary_str = self.sess.run([g_optim, self.g_sum],
             feed_dict={ self.z: batch_z, self.y:batch_labels })
           self.writer.add_summary(summary_str, counter)
-          
+          """       
           errD_fake = self.d_loss_fake.eval({
               self.z: batch_z, 
               self.y:batch_labels
@@ -257,17 +266,18 @@ class DCGAN(object):
           _, summary_str = self.sess.run([d_optim, self.d_sum],
             feed_dict={ self.inputs: batch_images, self.z: batch_z })
           self.writer.add_summary(summary_str, counter)
-
+          
           # Update G network
           _, summary_str = self.sess.run([g_optim, self.g_sum],
             feed_dict={ self.z: batch_z })
           self.writer.add_summary(summary_str, counter)
 
+          """
           # Run g_optim twice to make sure that d_loss does not go to zero (different from paper)
           _, summary_str = self.sess.run([g_optim, self.g_sum],
             feed_dict={ self.z: batch_z })
           self.writer.add_summary(summary_str, counter)
-          
+          """
           errD_fake = self.d_loss_fake.eval({ self.z: batch_z })
           errD_real = self.d_loss_real.eval({ self.inputs: batch_images })
           errG = self.g_loss.eval({self.z: batch_z})
@@ -277,7 +287,7 @@ class DCGAN(object):
           % (epoch, idx, batch_idxs,
             time.time() - start_time, errD_fake+errD_real, errG))
 
-        if np.mod(counter, 100) == 1:
+        if np.mod(counter, 20) == 1:
           if config.dataset == 'mnist':
             samples, d_loss, g_loss = self.sess.run(
               [self.sampler, self.d_loss, self.g_loss],
@@ -300,7 +310,7 @@ class DCGAN(object):
                 },
               )
               save_images(samples, image_manifold_size(samples.shape[0]),
-                    './{}/train_{:02d}_{:04d}.png'.format(config.sample_dir, epoch, idx))
+                    './{}/train_{:02d}_{:04d}_d_loss-{:08f}__g_loss-{:08f}.png'.format(config.sample_dir, epoch, idx, d_loss, g_loss))
               print("[Sample] d_loss: %.8f, g_loss: %.8f" % (d_loss, g_loss)) 
             except:
               print("one pic error!...")
@@ -381,17 +391,17 @@ class DCGAN(object):
         yb = tf.reshape(y, [self.batch_size, 1, 1, self.y_dim])
         z = concat([z, y], 1)
 
-        h0 = tf.nn.relu(
+        h0 = tf.nn.leaky_relu(
             self.g_bn0(linear(z, self.gfc_dim, 'g_h0_lin')))
         h0 = concat([h0, y], 1)
 
-        h1 = tf.nn.relu(self.g_bn1(
+        h1 = tf.nn.leaky_relu(self.g_bn1(
             linear(h0, self.gf_dim*2*s_h4*s_w4, 'g_h1_lin')))
         h1 = tf.reshape(h1, [self.batch_size, s_h4, s_w4, self.gf_dim * 2])
 
         h1 = conv_cond_concat(h1, yb)
 
-        h2 = tf.nn.relu(self.g_bn2(deconv2d(h1,
+        h2 = tf.nn.leaky_relu(self.g_bn2(deconv2d(h1,
             [self.batch_size, s_h2, s_w2, self.gf_dim * 2], name='g_h2')))
         h2 = conv_cond_concat(h2, yb)
 
